@@ -1,3 +1,4 @@
+from asyncio import coroutines
 import csv
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ from dotenv import load_dotenv
 DATA_DIRECTORY = Path("data/generated")
 
 
-def read_csv(file_name: str) -> list[dict[str, str | None]]:
+def read_csv(file_name: str) -> list[dict[str, str | bool | None]]:
     path = DATA_DIRECTORY / file_name
 
     if not path.exists():
@@ -24,6 +25,8 @@ def read_csv(file_name: str) -> list[dict[str, str | None]]:
         for key, value in row.items():
             if value == "":
                 row[key] = None
+        if "aml_flag" in row and row["aml_flag"] is not None:
+            row["aml_flag"] = row["aml_flag"] == "True"
 
     return rows
 
@@ -147,6 +150,43 @@ def load_accounts(
     )
 
 
+def load_transactions(
+    cursor: psycopg.Cursor,
+    rows: list[dict[str, str | None]],
+) -> None:
+    cursor.executemany(
+        """
+        INSERT INTO payments.bank_transaction (
+            transaction_id,
+            source_account_id,
+            destination_account_id,
+            transaction_ts,
+            transaction_type,
+            amount,
+            currency_code,
+            payment_channel,
+            aml_flag,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            %(transaction_id)s,
+            %(source_account_id)s,
+            %(destination_account_id)s,
+            %(transaction_ts)s,
+            %(transaction_type)s,
+            %(amount)s,
+            %(currency_code)s,
+            %(payment_channel)s,
+            %(aml_flag)s,
+            %(created_at)s,
+            %(updated_at)s
+        )
+        """,
+        rows,
+    )
+
+
 def main() -> None:
     load_dotenv()
 
@@ -158,12 +198,14 @@ def main() -> None:
     branches = read_csv("branches.csv")
     customers = read_csv("customers.csv")
     accounts = read_csv("accounts.csv")
+    transactions = read_csv("transactions.csv")
 
     with psycopg.connect(database_url) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
                 TRUNCATE TABLE
+                    payments.bank_transaction,
                     core.account,
                     core.customer,
                     core.branch
@@ -174,12 +216,14 @@ def main() -> None:
             load_branches(cursor, branches)
             load_customers(cursor, customers)
             load_accounts(cursor, accounts)
+            load_transactions(cursor, transactions)
 
         connection.commit()
 
     print(f"Loaded branches: {len(branches)}")
     print(f"Loaded customers: {len(customers)}")
     print(f"Loaded accounts: {len(accounts)}")
+    print(f"Loaded transactions: {len(transactions)}")
     print("Source master data loaded successfully")
 
 

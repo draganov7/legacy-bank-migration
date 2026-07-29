@@ -1,3 +1,4 @@
+from duckdb import cursor
 import os
 
 import psycopg
@@ -8,6 +9,7 @@ EXPECTED_COUNTS = {
     "core.branch": 5,
     "core.customer": 50,
     "core.account": 75,
+    "payments.bank_transaction": 500,
 }
 
 
@@ -49,6 +51,56 @@ def main() -> None:
             )
             orphan_branches = cursor.fetchone()[0]
 
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM payments.bank_transaction AS transaction
+                LEFT JOIN core.account AS account
+                    ON transaction.source_account_id = account.account_id
+                WHERE account.account_id IS NULL
+                """
+            )
+            missing_source_accounts = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM payments.bank_transaction AS transaction
+                LEFT JOIN core.account AS account
+                    ON transaction.destination_account_id = account.account_id
+                WHERE account.account_id IS NULL
+                """
+            )
+            missing_destination_accounts = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM payments.bank_transaction
+                WHERE source_account_id = destination_account_id
+                """
+            )
+            same_account_transactions = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM payments.bank_transaction
+                WHERE amount <= 0
+                """
+            )
+            invalid_amounts = cursor.fetchone()[0]
+
+            cursor.execute(
+                """
+                SELECT
+                    SUM(amount),
+                    COUNT(*) FILTER (WHERE aml_flag = TRUE)
+                FROM payments.bank_transaction
+                """
+            )
+            total_amount, aml_transaction_count = cursor.fetchone()
+
     for table_name, expected_count in EXPECTED_COUNTS.items():
         actual_count = actual_counts[table_name]
 
@@ -73,6 +125,36 @@ def main() -> None:
     print("Accounts with missing customers: 0")
     print("Accounts with missing branches: 0")
     print("Source master data verified successfully")
+
+    if missing_source_accounts != 0:
+        raise RuntimeError(
+            f"Transactions with missing source accounts: "
+            f"{missing_source_accounts}"
+        )
+
+    if missing_destination_accounts != 0:
+        raise RuntimeError(
+            f"Transactions with missing destination accounts: "
+            f"{missing_destination_accounts}"
+        )
+
+    if same_account_transactions != 0:
+        raise RuntimeError(
+            f"Transactions with identical accounts: "
+            f"{same_account_transactions}"
+        )
+
+    if invalid_amounts != 0:
+        raise RuntimeError(
+            f"Transactions with invalid amounts: {invalid_amounts}"
+        )
+
+    print("Transactions with missing source accounts: 0")
+    print("Transactions with missing destination accounts: 0")
+    print("Transactions with identical accounts: 0")
+    print("Transactions with invalid amounts: 0")
+    print(f"Total transaction amount: ₹{total_amount}")
+    print(f"AML-flagged transactions: {aml_transaction_count}")
 
 
 if __name__ == "__main__":
