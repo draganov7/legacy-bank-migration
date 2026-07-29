@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+
+# Data
+data/source_downloads/
+data/generated/
+data/landing/
+data/warehouse/
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+
+# dbt
+dbt_bank/target/
+dbt_bank/logs/
+dbt_bank/dbt_packages/
