@@ -3,10 +3,11 @@ import csv
 import hashlib
 import json
 import random
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timezone, timedelta
 from pathlib import Path
 
 from faker import Faker
+from decimal import Decimal
 
 
 DEFAULT_SEED = 20260726
@@ -210,12 +211,98 @@ def generate_accounts(
     return accounts
 
 
+def generate_transactions(
+    count: int,
+    accounts: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    transaction_types = [
+        "TRANSFER",
+        "TRANSFER",
+        "CARD_PAYMENT",
+        "CASH_WITHDRAWAL",
+        "DIRECT_DEBIT",
+    ]
+
+    channels_by_type = {
+        "TRANSFER": ["MOBILE", "ONLINE", "BRANCH"],
+        "CARD_PAYMENT": ["CARD"],
+        "CASH_WITHDRAWAL": ["ATM"],
+        "DIRECT_DEBIT": ["ONLINE"],
+    }
+
+    transactions = []
+
+    for transaction_id in range(1, count + 1):
+        source_account, destination_account = random.sample(accounts, 2)
+
+        opened_date = date.fromisoformat(
+            str(source_account["opened_date"])
+        )
+
+        closed_date_value = source_account["closed_date"]
+
+        if closed_date_value:
+            end_date = date.fromisoformat(str(closed_date_value))
+        else:
+            end_date = REFERENCE_DATE
+
+        days_available = (end_date - opened_date).days
+        transaction_date = opened_date + timedelta(
+            days=random.randint(0, days_available)
+        )
+
+        transaction_hour = random.randint(0, 23)
+        transaction_minute = random.randint(0, 59)
+        transaction_second = random.randint(0, 59)
+
+        transaction_timestamp = datetime.combine(
+            transaction_date,
+            time(
+                hour=transaction_hour,
+                minute=transaction_minute,
+                second=transaction_second,
+            ),
+            tzinfo=timezone.utc,
+        )
+
+        transaction_type = random.choice(transaction_types)
+        payment_channel = random.choice(
+            channels_by_type[transaction_type]
+        )
+
+        amount = Decimal(random.randint(100, 500000)) / Decimal("100")
+
+        update_delay_minutes = random.randint(0, 1440)
+        updated_timestamp = transaction_timestamp + timedelta(
+            minutes=update_delay_minutes
+        )
+
+        transactions.append(
+            {
+                "transaction_id": transaction_id,
+                "source_account_id": source_account["account_id"],
+                "destination_account_id": destination_account["account_id"],
+                "transaction_ts": transaction_timestamp.isoformat(),
+                "transaction_type": transaction_type,
+                "amount": f"{amount:.2f}",
+                "currency_code": "INR",
+                "payment_channel": payment_channel,
+                "aml_flag": random.random() < 0.03,
+                "created_at": transaction_timestamp.isoformat(),
+                "updated_at": updated_timestamp.isoformat(),
+            }
+        )
+
+    return transactions
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--branches", type=int, default=5)
     parser.add_argument("--customers", type=int, default=50)
     parser.add_argument("--accounts", type=int, default=75)
+    parser.add_argument("--transactions", type=int, default=500)
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -233,6 +320,11 @@ def main() -> None:
         args.branches,
     )
 
+    transactions = generate_transactions(
+        args.transactions,
+        accounts
+    )
+
     files = {
         "branches": (
             OUTPUT_DIRECTORY / "branches.csv",
@@ -245,6 +337,10 @@ def main() -> None:
         "accounts": (
             OUTPUT_DIRECTORY / "accounts.csv",
             accounts,
+        ),
+        "transactions": (
+            OUTPUT_DIRECTORY / "transactions.csv",
+            transactions,
         ),
     }
 
@@ -275,6 +371,8 @@ def main() -> None:
     )
 
     print(f"Generated manifest: {manifest_path}")
+
+
 
 
 if __name__ == "__main__":
