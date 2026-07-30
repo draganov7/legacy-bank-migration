@@ -237,6 +237,7 @@ def main() -> None:
             cursor.execute(
                 """
                 TRUNCATE TABLE
+                    control.defect_manifest,
                     finance.daily_account_balance,
                     payments.bank_transaction,
                     core.account,
