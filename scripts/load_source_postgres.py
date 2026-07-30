@@ -187,6 +187,37 @@ def load_transactions(
     )
 
 
+def load_daily_balances(
+    cursor: psycopg.Cursor,
+    rows: list[dict[str, str | bool | None]],
+) -> None:
+    cursor.executemany(
+        """
+        INSERT INTO finance.daily_account_balance (
+            account_id,
+            business_date,
+            opening_balance,
+            debit_total,
+            credit_total,
+            closing_balance,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            %(account_id)s,
+            %(business_date)s,
+            %(opening_balance)s,
+            %(debit_total)s,
+            %(credit_total)s,
+            %(closing_balance)s,
+            %(created_at)s,
+            %(updated_at)s
+        )
+        """,
+        rows,
+    )
+
+
 def main() -> None:
     load_dotenv()
 
@@ -199,12 +230,14 @@ def main() -> None:
     customers = read_csv("customers.csv")
     accounts = read_csv("accounts.csv")
     transactions = read_csv("transactions.csv")
+    daily_balaces = read_csv("daily_balances.csv")
 
     with psycopg.connect(database_url) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
                 """
                 TRUNCATE TABLE
+                    finance.daily_account_balance,
                     payments.bank_transaction,
                     core.account,
                     core.customer,
@@ -217,6 +250,7 @@ def main() -> None:
             load_customers(cursor, customers)
             load_accounts(cursor, accounts)
             load_transactions(cursor, transactions)
+            load_daily_balances(cursor, daily_balaces)
 
         connection.commit()
 
@@ -224,6 +258,7 @@ def main() -> None:
     print(f"Loaded customers: {len(customers)}")
     print(f"Loaded accounts: {len(accounts)}")
     print(f"Loaded transactions: {len(transactions)}")
+    print(f"Loaded daily balances: {len(daily_balaces)}")
     print("Source master data loaded successfully")
 
 
