@@ -8,6 +8,7 @@ from pathlib import Path
 
 from faker import Faker
 from decimal import Decimal
+from collections import defaultdict
 
 
 DEFAULT_SEED = 20260726
@@ -296,6 +297,97 @@ def generate_transactions(
     return transactions
 
 
+def generate_daily_balances(
+    accounts: list[dict[str, object]],
+    transactions: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    movements = defaultdict(
+        lambda: {
+            "debit_total": Decimal("0.00"),
+            "credit_total": Decimal("0.00"),
+        }
+    )
+
+    for transaction in transactions:
+        business_date = datetime.fromisoformat(
+            str(transaction["transaction_ts"])
+        ).date()
+
+        amount = Decimal(str(transaction["amount"]))
+
+        source_key = (
+            int(transaction["source_account_id"]),
+            business_date,
+        )
+        destination_key = (
+            int(transaction["destination_account_id"]),
+            business_date,
+        )
+
+        movements[source_key]["debit_total"] += amount
+        movements[destination_key]["credit_total"] += amount
+
+    rows = []
+
+    for account in accounts:
+        account_id = int(account["account_id"])
+
+        account_dates = sorted(
+            business_date
+            for movement_account_id, business_date in movements
+            if movement_account_id == account_id
+        )
+
+        if not account_dates:
+            continue
+
+        opening_balance = (
+            Decimal("10000.00")
+            + Decimal(account_id * 100)
+        )
+
+        for business_date in account_dates:
+            movement = movements[(account_id, business_date)]
+            debit_total = movement["debit_total"]
+            credit_total = movement["credit_total"]
+
+            closing_balance = (
+                opening_balance
+                + credit_total
+                - debit_total
+            )
+
+            timestamp = datetime.combine(
+                business_date,
+                time(hour=23, minute=59),
+                tzinfo=timezone.utc,
+            ).isoformat()
+
+            rows.append(
+                {
+                    "account_id": account_id,
+                    "business_date": business_date.isoformat(),
+                    "opening_balance": f"{opening_balance:.2f}",
+                    "debit_total": f"{debit_total:.2f}",
+                    "credit_total": f"{credit_total:.2f}",
+                    "closing_balance": f"{closing_balance:.2f}",
+                    "created_at": timestamp,
+                    "updated_at": timestamp,
+                }
+            )
+
+            opening_balance = closing_balance
+
+    rows.sort(
+        key=lambda row: (
+            int(row["account_id"]),
+            str(row["business_date"]),
+        )
+    )
+
+    return rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -325,6 +417,12 @@ def main() -> None:
         accounts
     )
 
+    daily_balances = generate_daily_balances(
+        accounts,
+        transactions,
+    )
+
+
     files = {
         "branches": (
             OUTPUT_DIRECTORY / "branches.csv",
@@ -341,6 +439,10 @@ def main() -> None:
         "transactions": (
             OUTPUT_DIRECTORY / "transactions.csv",
             transactions,
+        ),
+        "daily_balances": (
+            OUTPUT_DIRECTORY / "daily_balances.csv",
+            daily_balances,
         ),
     }
 
