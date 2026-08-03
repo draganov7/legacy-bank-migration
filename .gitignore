@@ -23,6 +23,7 @@ data/warehouse/
 *.duckdb
 *.duckdb.wal
 *.parquet
+data/quarantine/
 
 # IDE and operating system
 .vscode/
