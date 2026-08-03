@@ -8,5 +8,6 @@ dependencies = [
     "duckdb>=1.5.5",
     "faker>=40.36.0",
     "psycopg[binary]>=3.3.4",
+    "pyarrow>=25.0.0",
     "python-dotenv>=1.2.2",
 ]

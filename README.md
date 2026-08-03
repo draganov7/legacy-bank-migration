@@ -24,3 +24,18 @@ DuckDB raw → staging → core
        |
        v
 BigQuery Sandbox demonstration
+```
+
+## Target data layers
+
+| Layer | Purpose |
+|---|---|
+| raw | Immutable source-shaped records with migration metadata |
+| staging | Typed, standardised, deduplicated, and validated records |
+| core | Business-ready dimensions and facts |
+| quarantine | Rejected records with rules and source payloads |
+| reconciliation | Count, relationship, and financial comparisons |
+
+Detailed mappings are documented in:
+
+`docs/source_to_target_mapping/core_mapping.md`
