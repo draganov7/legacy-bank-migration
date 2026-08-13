@@ -263,6 +263,43 @@ def main() -> None:
             'FROZEN',
             'CLOSED'
         )
+
+        UNION ALL
+
+        SELECT
+            migration_batch_id,
+            source_system,
+            source_table,
+            source_record_key,
+
+            'ACCOUNT_BRANCH_REFERENCE' AS rule_id,
+            'HIGH' AS severity,
+            'Account branch_id does not resolve to a valid branch.'
+                AS error_message,
+
+            to_json(
+                struct_pack(
+                    account_id := account_id,
+                    account_number := account_number,
+                    customer_id := customer_id,
+                    branch_id := branch_id,
+                    account_type := account_type,
+                    currency_code := currency_code,
+                    opened_date := opened_date,
+                    closed_date := closed_date,
+                    status := status
+                )
+            ) AS raw_payload,
+
+            ?::TIMESTAMPTZ AS rejected_at,
+            'OPEN' AS resolution_status
+
+        FROM raw.raw_account as account
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM core.dim_branch AS branch
+            WHERE branch.branch_id = account.branch_id
+        )
         """,
         [
             rejected_at,
@@ -270,6 +307,7 @@ def main() -> None:
             rejected_at,
             rejected_at,
             rejected_at,
+            rejected_at
         ],
     )
 
